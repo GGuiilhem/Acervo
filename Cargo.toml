@@ -1,6 +1,6 @@
 [package]
 name = "acervo"
-version = "0.6.1"
+version = "0.6.2"
 description = "Encontre, organize e controle seus arquivos"
 edition = "2021"
 
