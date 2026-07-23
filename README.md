@@ -18,6 +18,7 @@ Aplicativo desktop para Windows construído em Rust e Tauri. O módulo atual ofe
 - Oito temas planos: Light, Dark, Slate, Nous, MidNight, Ember, Mono e CyberPunk.
 - Interface em Português (Brasil) e English, com preferências persistentes.
 - Notificação do Windows ao concluir pesquisas em segundo plano.
+- Colunas redimensionáveis, com larguras persistentes e ordenação crescente/decrescente.
 
 ## Desenvolvimento
 
