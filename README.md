@@ -17,8 +17,9 @@ Aplicativo desktop para Windows construído em Rust e Tauri. O módulo atual ofe
 - Caminho rápido por bytes para pesquisas literais e paralelismo adaptado à CPU.
 - Oito temas planos: Light, Dark, Slate, Nous, MidNight, Ember, Mono e CyberPunk.
 - Interface em Português (Brasil) e English, com preferências persistentes.
-- Notificação do Windows ao concluir pesquisas em segundo plano.
+- Notificação ao concluir pesquisas, inclusive em primeiro plano, com teste integrado nas configurações.
 - Colunas redimensionáveis, com larguras persistentes e ordenação crescente/decrescente.
+- Contagem prévia opcional com barra de progresso exata em toda a largura dos resultados.
 
 ## Desenvolvimento
 

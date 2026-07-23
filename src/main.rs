@@ -35,6 +35,7 @@ struct SearchRequest {
     whole_word: bool,
     include_hidden: bool,
     include_subfolders: bool,
+    pre_count: bool,
     file_pattern: String,
     min_size: Option<u64>,
     max_size: Option<u64>,
@@ -67,12 +68,16 @@ struct SearchResult {
 #[derive(Clone, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 enum SearchEvent {
+    Cataloging {
+        discovered: usize,
+    },
     Result {
         item: SearchResult,
     },
     Progress {
         scanned: usize,
         found: usize,
+        total: Option<usize>,
     },
     Finished {
         scanned: usize,
@@ -222,6 +227,45 @@ fn run_streaming_search(
     let found = Arc::new(AtomicUsize::new(0));
     let started = Instant::now();
     let last_progress_ms = Arc::new(AtomicU64::new(0));
+    let total = if req.pre_count {
+        let discovered = Arc::new(AtomicUsize::new(0));
+        let last_catalog_ms = Arc::new(AtomicU64::new(0));
+        let mut counter = WalkBuilder::new(&req.directory);
+        counter
+            .hidden(!req.include_hidden)
+            .max_depth(if req.include_subfolders { None } else { Some(1) })
+            .follow_links(false)
+            .threads(std::thread::available_parallelism().map_or(8, |v| v.get().clamp(4, 16)));
+        counter.build_parallel().run(|| {
+            let active = active.clone();
+            let discovered = discovered.clone();
+            let last_catalog_ms = last_catalog_ms.clone();
+            let events = events.clone();
+            Box::new(move |entry| {
+                if active.load(Ordering::Relaxed) != id {
+                    return WalkState::Quit;
+                }
+                if entry.ok().and_then(|value| value.file_type()).is_some_and(|kind| kind.is_file()) {
+                    let current = discovered.fetch_add(1, Ordering::Relaxed) + 1;
+                    let elapsed_ms = started.elapsed().as_millis() as u64;
+                    let previous_ms = last_catalog_ms.load(Ordering::Relaxed);
+                    if elapsed_ms.saturating_sub(previous_ms) >= 100
+                        && last_catalog_ms.compare_exchange(previous_ms, elapsed_ms, Ordering::Relaxed, Ordering::Relaxed).is_ok()
+                    {
+                        let _ = events.send(SearchEvent::Cataloging { discovered: current });
+                    }
+                }
+                WalkState::Continue
+            })
+        });
+        if active.load(Ordering::Relaxed) != id {
+            let _ = events.send(SearchEvent::Finished { scanned: 0, found: 0, cancelled: true });
+            return;
+        }
+        Some(discovered.load(Ordering::Relaxed))
+    } else {
+        None
+    };
     let mut builder = WalkBuilder::new(&req.directory);
     builder
         .hidden(!req.include_hidden)
@@ -277,6 +321,7 @@ fn run_streaming_search(
                 let _ = events.send(SearchEvent::Progress {
                     scanned: current,
                     found: found.load(Ordering::Relaxed),
+                    total,
                 });
             }
             let name = entry.file_name().to_string_lossy();
@@ -431,6 +476,7 @@ fn replace_in_files(req: ReplaceRequest) -> Result<usize, String> {
         whole_word: req.whole_word,
         include_hidden: true,
         include_subfolders: true,
+        pre_count: false,
         file_pattern: "*".into(),
         min_size: None,
         max_size: None,
@@ -595,6 +641,7 @@ mod tests {
             whole_word: false,
             include_hidden: false,
             include_subfolders: true,
+            pre_count: false,
             file_pattern: "*".into(),
             min_size: None,
             max_size: None,
@@ -617,6 +664,7 @@ mod tests {
             whole_word: false,
             include_hidden: false,
             include_subfolders: true,
+            pre_count: false,
             file_pattern: "*.xml".into(),
             min_size: None,
             max_size: None,

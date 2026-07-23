@@ -29,9 +29,13 @@ const windowMessages = {
   'pt-BR': { minimize:'Minimizar', maximize:'Maximizar', restore:'Restaurar', close:'Fechar' },
   'en-US': { minimize:'Minimize', maximize:'Maximize', restore:'Restore', close:'Close' }
 };
+const progressMessages = {
+  'pt-BR': { searchSettings:'Pesquisa',searchSettingsDesc:'Configure como o Acervo prepara e acompanha as pesquisas.',exactProgress:'Progresso exato',countBeforeSearch:'Contar todos os arquivos antes de pesquisar',countPerformanceWarning:'Exibe porcentagem exata, mas adiciona uma varredura completa e atrasa o início dos resultados. O impacto é maior em pesquisas por nome, HDs, rede e pastas sincronizadas.',cataloging:n=>`Catalogando arquivos — ${n} encontrados`,scannedExact:(a,total,p,f)=>`${a} de ${total} examinados — ${p}% — ${f} encontrados`,notificationsDesc:'Receba um aviso do Windows quando uma varredura terminar.',notifyAlways:'O aviso aparece sempre, mesmo quando o Acervo estiver em primeiro plano.',notificationInstallRequired:'No Windows, as notificações exigem que o Acervo seja instalado pelo MSI; a versão portátil não é registrada pelo sistema.',testNotification:'Testar notificação',testNotificationSent:'Notificação de teste enviada ao Windows.' },
+  'en-US': { searchSettings:'Search',searchSettingsDesc:'Configure how Acervo prepares and tracks searches.',exactProgress:'Exact progress',countBeforeSearch:'Count all files before searching',countPerformanceWarning:'Shows an exact percentage, but adds a full scan and delays the first results. The impact is greater for name searches, hard drives, network locations, and synced folders.',cataloging:n=>`Cataloging files — ${n} found`,scannedExact:(a,total,p,f)=>`${a} of ${total} scanned — ${p}% — ${f} found`,notificationsDesc:'Receive a Windows alert when a scan finishes.',notifyAlways:'The alert always appears, even while Acervo is in the foreground.',notificationInstallRequired:'On Windows, notifications require Acervo to be installed using the MSI; the portable build is not registered with the system.',testNotification:'Test notification',testNotificationSent:'Test notification sent to Windows.' }
+};
 let prefs;
-try { prefs = { theme:'dark', language:'pt-BR', notifyComplete:false, ...JSON.parse(localStorage.getItem('acervo.settings') || '{}') }; } catch { prefs = { theme:'dark', language:'pt-BR', notifyComplete:false }; }
-const t = (key, ...args) => { const value = messages[prefs.language][key] ?? windowMessages[prefs.language]?.[key] ?? messages['pt-BR'][key] ?? windowMessages['pt-BR'][key] ?? key; return typeof value === 'function' ? value(...args) : value; };
+try { prefs = { theme:'dark', language:'pt-BR', notifyComplete:false, preCount:false, ...JSON.parse(localStorage.getItem('acervo.settings') || '{}') }; } catch { prefs = { theme:'dark', language:'pt-BR', notifyComplete:false, preCount:false }; }
+const t = (key, ...args) => { const value = progressMessages[prefs.language]?.[key] ?? messages[prefs.language][key] ?? windowMessages[prefs.language]?.[key] ?? progressMessages['pt-BR'][key] ?? messages['pt-BR'][key] ?? windowMessages['pt-BR'][key] ?? key; return typeof value === 'function' ? value(...args) : value; };
 const localeNumber = value => value.toLocaleString(prefs.language);
 function savePrefs() { localStorage.setItem('acervo.settings', JSON.stringify(prefs)); }
 function translatePage() {
@@ -45,7 +49,7 @@ function renderThemes() {
   $('theme-grid').innerHTML = themes.map(theme => `<button class="theme-card ${prefs.theme===theme.id?'active':''}" data-theme-choice="${theme.id}"><span class="theme-colors">${theme.colors.map(c=>`<i style="background:${c}"></i>`).join('')}</span><strong>${theme.name}</strong></button>`).join('');
   document.querySelectorAll('[data-theme-choice]').forEach(button => button.onclick = () => { prefs.theme = button.dataset.themeChoice; document.documentElement.dataset.theme = prefs.theme; savePrefs(); renderThemes(); });
 }
-function applyPrefs() { document.documentElement.dataset.theme = prefs.theme; document.querySelectorAll('[name=language]').forEach(r=>r.checked=r.value===prefs.language); $('notify-complete').checked=prefs.notifyComplete; renderThemes(); translatePage(); }
+function applyPrefs() { document.documentElement.dataset.theme = prefs.theme; document.querySelectorAll('[name=language]').forEach(r=>r.checked=r.value===prefs.language); $('notify-complete').checked=prefs.notifyComplete;$('pre-count').checked=prefs.preCount;renderThemes();translatePage(); }
 
 window.addEventListener('focus',()=>windowFocused=true); window.addEventListener('blur',()=>windowFocused=false);
 async function updateMaximizeButton(){const maximized=await appWindow.isMaximized();const button=$('window-maximize');button.dataset.maximized=String(maximized);button.title=t(maximized?'restore':'maximize');button.setAttribute('aria-label',button.title)}
@@ -59,7 +63,9 @@ $('settings-close').onclick=()=>$('settings-modal').hidden=true; document.queryS
 document.querySelectorAll('[data-settings-tab]').forEach(button=>button.onclick=()=>{document.querySelectorAll('[data-settings-tab]').forEach(b=>b.classList.toggle('active',b===button));document.querySelectorAll('[data-settings-panel]').forEach(p=>p.hidden=p.dataset.settingsPanel!==button.dataset.settingsTab)});
 document.querySelectorAll('[name=language]').forEach(radio=>radio.onchange=()=>{prefs.language=radio.value;savePrefs();translatePage()});
 $('notify-complete').onchange=async()=>{let enabled=$('notify-complete').checked;if(enabled){let granted=await notification.isPermissionGranted();if(!granted)granted=(await notification.requestPermission())==='granted';enabled=granted;$('notify-complete').checked=granted;$('notification-permission').textContent=t(granted?'permissionGranted':'permissionDenied')}else $('notification-permission').textContent='';prefs.notifyComplete=enabled;savePrefs()};
-async function notifyFinished(scanned,foundCount){if(!prefs.notifyComplete||(!document.hidden&&windowFocused))return;try{if(await notification.isPermissionGranted())notification.sendNotification({title:t('notificationTitle'),body:t('notificationBody',localeNumber(scanned),localeNumber(foundCount))})}catch{}}
+$('pre-count').onchange=()=>{prefs.preCount=$('pre-count').checked;savePrefs()};
+$('test-notification').onclick=async()=>{let granted=await notification.isPermissionGranted();if(!granted)granted=(await notification.requestPermission())==='granted';if(granted){notification.sendNotification({title:'Acervo',body:t('testNotificationSent')});$('notification-permission').textContent=t('testNotificationSent')}else $('notification-permission').textContent=t('permissionDenied')};
+async function notifyFinished(scanned,foundCount){if(!prefs.notifyComplete)return;try{if(await notification.isPermissionGranted())notification.sendNotification({title:t('notificationTitle'),body:t('notificationBody',localeNumber(scanned),localeNumber(foundCount))})}catch{}}
 
 $('advanced-toggle').onclick=()=>{const open=$('advanced-toggle').getAttribute('aria-expanded')==='true';$('advanced-toggle').setAttribute('aria-expanded',String(!open));$('advanced').hidden=open};
 $('browse').onclick=async()=>{const value=await dialog.open({directory:true,multiple:false,title:t('selectFolder')});if(value)$('directory').value=value};
@@ -84,8 +90,37 @@ function setupTable(){let widths={};try{widths=JSON.parse(localStorage.getItem('
 function showMenu(x,y){const m=$('context-menu');m.hidden=false;m.style.left=`${Math.min(x,innerWidth-210)}px`;m.style.top=`${Math.min(y,innerHeight-210)}px`}document.addEventListener('click',()=>{$('context-menu').hidden=true});
 function sizeFilters(){const mode=$('size-mode').value,unit=Number($('size-unit').value),a=Number($('size-a').value)*unit,b=Number($('size-b').value)*unit;if(mode==='min')return[a||null,null];if(mode==='max')return[null,a||null];if(mode==='between')return[Math.min(a,b),Math.max(a,b)];return[null,null]}
 function dayValue(id,end=false){const value=$(id).value;return value?Math.floor(new Date(`${value}T${end?'23:59:59':'00:00:00'}`).getTime()/1000):null}function dateFilters(){const mode=$('date-mode').value;if(mode==='after')return[dayValue('date-a'),null];if(mode==='before')return[null,dayValue('date-a',true)];if(mode==='between')return[dayValue('date-a'),dayValue('date-b',true)];return[null,null]}
-function requestData(){const[minSize,maxSize]=sizeFilters(),[minModified,maxModified]=dateFilters();return{directory:$('directory').value.trim(),query:$('query').value,mode:currentMode(),useRegex:$('regex').checked,caseSensitive:$('case').checked,wholeWord:$('whole').checked,includeHidden:$('hidden').checked,includeSubfolders:$('subfolders').checked,filePattern:$('pattern').value,minSize,maxSize,minModified,maxModified}}
-async function search(){if(searching)return;found=0;pending.length=0;selected.clear();selectingAll=false;updateSelection();$('results').innerHTML='';$('actions').hidden=true;$('count').textContent=t('files',0);$('empty').style.display='flex';$('empty').querySelector('strong').textContent=t('searching');$('empty').querySelector('span').textContent=t('resultsImmediate');$('status').classList.remove('error');setSearching(true);const channel=new Channel();channel.onmessage=event=>{if(event.type==='result')enqueueResult(event.item);else if(event.type==='progress')$('status').textContent=t('scanned',localeNumber(event.scanned),localeNumber(event.found));else if(event.type==='finished'){setSearching(false);$('status').textContent=event.cancelled?t('cancelled'):t('finished',localeNumber(event.scanned));if(!event.found){$('empty').querySelector('strong').textContent=t('noResults');$('empty').querySelector('span').textContent=t('tryFilters')}if(!event.cancelled)notifyFinished(event.scanned,event.found)}};try{await invoke('start_search',{req:requestData(),onEvent:channel})}catch(error){setSearching(false);$('status').textContent=String(error);$('status').classList.add('error')}}
+function requestData(){const[minSize,maxSize]=sizeFilters(),[minModified,maxModified]=dateFilters();return{directory:$('directory').value.trim(),query:$('query').value,mode:currentMode(),useRegex:$('regex').checked,caseSensitive:$('case').checked,wholeWord:$('whole').checked,includeHidden:$('hidden').checked,includeSubfolders:$('subfolders').checked,preCount:$('pre-count').checked,filePattern:$('pattern').value,minSize,maxSize,minModified,maxModified}}
+async function search(){
+  if(searching)return;
+  found=0;pending.length=0;selected.clear();selectingAll=false;updateSelection();
+  $('results').innerHTML='';$('actions').hidden=true;$('count').textContent=t('files',0);
+  $('empty').style.display='flex';$('empty').querySelector('strong').textContent=t('searching');$('empty').querySelector('span').textContent=t('resultsImmediate');$('status').classList.remove('error');
+  const exact=$('pre-count').checked,progress=$('search-progress'),fill=progress.querySelector('span');
+  progress.hidden=!exact;progress.classList.toggle('indeterminate',exact);fill.style.width='0%';
+  setSearching(true);
+  const channel=new Channel();
+  channel.onmessage=event=>{
+    if(event.type==='cataloging'){
+      $('status').textContent=t('cataloging',localeNumber(event.discovered));
+    }else if(event.type==='result'){
+      enqueueResult(event.item);
+    }else if(event.type==='progress'){
+      if(event.total!=null){
+        const percent=event.total?Math.min(100,event.scanned/event.total*100):100;
+        progress.hidden=false;progress.classList.remove('indeterminate');fill.style.width=`${percent}%`;
+        $('status').textContent=t('scannedExact',localeNumber(event.scanned),localeNumber(event.total),percent.toFixed(1),localeNumber(event.found));
+      }else $('status').textContent=t('scanned',localeNumber(event.scanned),localeNumber(event.found));
+    }else if(event.type==='finished'){
+      setSearching(false);
+      if(exact){progress.classList.remove('indeterminate');fill.style.width=event.cancelled?'0%':'100%';progress.hidden=event.cancelled}
+      $('status').textContent=event.cancelled?t('cancelled'):t('finished',localeNumber(event.scanned));
+      if(!event.found){$('empty').querySelector('strong').textContent=t('noResults');$('empty').querySelector('span').textContent=t('tryFilters')}
+      if(!event.cancelled)notifyFinished(event.scanned,event.found);
+    }
+  };
+  try{await invoke('start_search',{req:requestData(),onEvent:channel})}catch(error){setSearching(false);progress.hidden=true;$('status').textContent=String(error);$('status').classList.add('error')}
+}
 $('search').onclick=search;$('cancel').onclick=()=>invoke('cancel_search');$('query').onkeydown=e=>{if(e.key==='Enter')search()};
 async function replaceSelected(paths){if(!$('enable-replace').checked){$('status').textContent=t('enableReplaceHint');return}const custom=currentMode()==='name'||$('replace-source').value==='custom',replaceQuery=custom?$('replace-query').value:$('query').value;if(!replaceQuery){$('status').textContent=t(custom?'enterOther':'enterSearch');$('status').classList.add('error');return}if(!confirm(t('replaceConfirm',paths.length,$('backup').checked)))return;const changed=await invoke('replace_in_files',{req:{paths,query:replaceQuery,replacement:$('replacement').value,useRegex:$('regex').checked,caseSensitive:$('case').checked,wholeWord:$('whole').checked,createBackup:$('backup').checked}});$('status').textContent=t('changed',changed)}
 async function action(name){const paths=[...selected];if(!paths.length)return;try{if(name==='open'){for(const path of paths)await invoke('open_path',{path})}else if(name==='folder'){const count=await invoke('open_containing_folders',{paths});$('status').textContent=t('foldersOpened',count)}else if(name==='zip'){const destination=await dialog.save({title:t('saveZip'),defaultPath:'resultados.zip',filters:[{name:t('zipFile'),extensions:['zip']}]});if(!destination)return;const count=await invoke('zip_files',{paths,destination});$('status').textContent=t('zipCreated',count)}else if(name==='replace')await replaceSelected(paths);else{const destination=await dialog.open({directory:true,multiple:false,title:t(name==='copy'?'copyDialog':'moveDialog')});if(!destination)return;const count=await invoke('transfer_files',{paths,destination,moveFiles:name==='move'});$('status').textContent=t('transferred',count,name==='move');if(name==='move')search()}}catch(error){$('status').textContent=String(error);$('status').classList.add('error')}}
