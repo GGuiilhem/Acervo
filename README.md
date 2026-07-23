@@ -15,6 +15,9 @@ Aplicativo desktop para Windows construído em Rust e Tauri. O módulo atual ofe
 - Abrir, copiar, mover e compactar arquivos selecionados.
 - Interface em português, com temas escuro e claro.
 - Caminho rápido por bytes para pesquisas literais e paralelismo adaptado à CPU.
+- Oito temas planos: Light, Dark, Slate, Nous, MidNight, Ember, Mono e CyberPunk.
+- Interface em Português (Brasil) e English, com preferências persistentes.
+- Notificação do Windows ao concluir pesquisas em segundo plano.
 
 ## Desenvolvimento
 

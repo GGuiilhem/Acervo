@@ -1,6 +1,6 @@
 [package]
 name = "acervo"
-version = "0.5.3"
+version = "0.6.0"
 description = "Encontre, organize e controle seus arquivos"
 edition = "2021"
 
@@ -10,6 +10,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
+tauri-plugin-notification = "2"
 serde = { version = "1", features = ["derive"] }
 ignore = "0.4"
 regex = "1"
