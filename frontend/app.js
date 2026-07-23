@@ -48,7 +48,7 @@ function renderThemes() {
 function applyPrefs() { document.documentElement.dataset.theme = prefs.theme; document.querySelectorAll('[name=language]').forEach(r=>r.checked=r.value===prefs.language); $('notify-complete').checked=prefs.notifyComplete; renderThemes(); translatePage(); }
 
 window.addEventListener('focus',()=>windowFocused=true); window.addEventListener('blur',()=>windowFocused=false);
-async function updateMaximizeButton(){const maximized=await appWindow.isMaximized();const button=$('window-maximize');button.textContent=maximized?'❐':'□';button.title=t(maximized?'restore':'maximize');button.setAttribute('aria-label',button.title)}
+async function updateMaximizeButton(){const maximized=await appWindow.isMaximized();const button=$('window-maximize');button.dataset.maximized=String(maximized);button.title=t(maximized?'restore':'maximize');button.setAttribute('aria-label',button.title)}
 $('window-minimize').onclick=()=>appWindow.minimize();
 $('window-maximize').onclick=async()=>{await appWindow.toggleMaximize();updateMaximizeButton()};
 $('window-close').onclick=()=>appWindow.close();
