@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 360" role="img" aria-label="Acervo">
+  <defs><linearGradient id="g" x1="390" y1="20" x2="650" y2="330" gradientUnits="userSpaceOnUse"><stop stop-color="#A99CFF"/><stop offset="1" stop-color="#6552EC"/></linearGradient></defs>
+  <g fill="#172033" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="190" font-weight="500">
+    <text x="45" y="285">Acer</text><text x="700" y="285">o</text>
+  </g>
+  <path d="M625 285 565 164M625 285l60-121" fill="none" stroke="url(#g)" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M565 164c-40-29-55-68-50-116m50 116c-22-52-19-99 2-139m-44 88-39-28m51-25-20-34M685 164c40-29 55-68 50-116m-50 116c22-52 19-99-2-139m44 88 39-28m-51-25 20-34" fill="none" stroke="url(#g)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

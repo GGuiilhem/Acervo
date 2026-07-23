@@ -1,0 +1,10 @@
+/target/
+/gen/
+/preview.png
+/brand/*-preview.png
+*.bak
+*.tmp
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

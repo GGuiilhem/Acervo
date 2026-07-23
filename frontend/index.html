@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Acervo</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header>
+      <div class="brand"><img src="assets/acervo-mark.svg" alt="Acervo"><div><h1>Acervo</h1><p>Encontre, organize e controle seus arquivos</p></div></div>
+      <button id="theme" class="icon-btn" title="Alternar tema">☾</button>
+    </header>
+
+    <section class="card search-card">
+      <label for="directory">Pesquisar em</label>
+      <div class="input-group">
+        <input id="directory" placeholder="Selecione uma pasta…" autocomplete="off">
+        <button id="browse" class="secondary">Selecionar pasta</button>
+      </div>
+
+      <div class="mode-switch-row">
+        <span id="content-label" class="mode-label active">Conteúdo dos arquivos</span>
+        <label class="switch" title="Alternar entre pesquisa no conteúdo e no nome"><input id="search-mode" type="checkbox"><span class="slider"></span></label>
+        <span id="name-label" class="mode-label">Nome dos arquivos</span>
+      </div>
+
+      <label for="query">O que você deseja encontrar?</label>
+      <div class="input-group query-row">
+        <input id="query" placeholder="Digite um texto ou uma expressão…" autofocus>
+        <button id="search" class="primary"><span>⌕</span> Pesquisar</button>
+        <button id="cancel" class="danger" hidden>Cancelar</button>
+      </div>
+
+      <button id="advanced-toggle" class="advanced-toggle" aria-expanded="false">
+        <span>Opções avançadas</span><span class="chevron">⌄</span>
+      </button>
+      <div id="advanced" class="advanced" hidden>
+        <div class="advanced-grid">
+          <label class="field">Tipos de arquivo<input id="pattern" value="*" placeholder="*.txt; *.md"></label>
+          <div class="checks">
+            <label><input id="regex" type="checkbox"> Expressão regular</label>
+            <label><input id="case" type="checkbox"> Diferenciar maiúsculas</label>
+            <label><input id="whole" type="checkbox"> Palavra inteira</label>
+            <label><input id="hidden" type="checkbox"> Incluir itens ocultos</label>
+            <label><input id="subfolders" type="checkbox" checked> Incluir subpastas</label>
+          </div>
+          <div id="replace-section" class="advanced-section">
+            <h3>Pesquisar e substituir</h3>
+            <div class="option-line"><label><input id="enable-replace" type="checkbox"> Ativar substituição</label><label><input id="backup" type="checkbox" checked> Criar backup (.bak)</label></div>
+            <label id="replace-source-field" class="field">O que substituir
+              <select id="replace-source" disabled><option value="search">O texto pesquisado acima</option><option value="custom">Outro texto ou palavra</option></select>
+            </label>
+            <label id="replace-query-field" class="field" hidden>Localizar este outro texto<input id="replace-query" placeholder="Texto ou palavra que será substituído…" disabled></label>
+            <label class="field">Substituir o conteúdo localizado por<input id="replacement" placeholder="Novo texto…" disabled></label>
+            <small id="replace-help">Localiza, dentro dos arquivos selecionados, o texto usado na pesquisa e troca pelo novo conteúdo. A operação sempre pede confirmação.</small>
+          </div>
+          <div class="advanced-section">
+            <h3>Filtrar por tamanho</h3>
+            <div class="filter-row"><select id="size-mode"><option value="any">Qualquer tamanho</option><option value="min">Maior que</option><option value="max">Menor que</option><option value="between">Entre</option></select><input id="size-a" type="number" min="0" step="0.1" placeholder="0" disabled><span id="size-and" hidden>e</span><input id="size-b" type="number" min="0" step="0.1" placeholder="0" disabled hidden><select id="size-unit"><option value="1024">KB</option><option value="1048576" selected>MB</option><option value="1073741824">GB</option></select></div>
+          </div>
+          <div class="advanced-section">
+            <h3>Filtrar por data de modificação</h3>
+            <div class="filter-row"><select id="date-mode"><option value="any">Qualquer data</option><option value="after">Após</option><option value="before">Antes</option><option value="between">Entre</option></select><input id="date-a" type="date" disabled><span id="date-and" hidden>e</span><input id="date-b" type="date" disabled hidden></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card results-card">
+      <div class="results-header"><div><h2>Resultados</h2><p><span id="status">Pronto para pesquisar</span><span class="open-hint"> · Clique duas vezes em um resultado para abrir</span></p></div><span id="count" class="badge">0 arquivos</span></div>
+      <div id="actions" class="file-actions" hidden>
+        <strong id="selected-count">0 selecionados</strong>
+        <button data-action="open">Abrir</button><button data-action="folder">Abrir na pasta</button>
+        <button data-action="copy">Copiar para…</button><button data-action="move">Mover/recortar para…</button><button data-action="zip">Zipar selecionados…</button><button id="replace-action" class="replace-option" data-action="replace" hidden>Substituir conteúdo nos selecionados</button>
+      </div>
+      <div class="table-wrap">
+        <table><thead><tr><th class="select-col"><input id="select-all" class="row-check" type="checkbox" title="Selecionar todos"></th><th>Nome</th><th>Correspondências</th><th>Tamanho</th><th>Modificado</th><th>Caminho</th></tr></thead><tbody id="results"></tbody></table>
+        <div id="empty" class="empty"><div class="empty-icon">⌕</div><strong>Seus resultados aparecerão aqui</strong><span>Escolha uma pasta e faça uma pesquisa.</span></div>
+      </div>
+    </section>
+  </main>
+  <div id="context-menu" class="context-menu" hidden><button data-action="open">Abrir</button><button data-action="folder">Abrir na pasta</button><hr><button data-action="copy">Copiar para…</button><button data-action="move">Mover/recortar para…</button><button data-action="zip">Zipar selecionados…</button><button class="replace-option" data-action="replace" hidden>Substituir conteúdo nos selecionados</button></div>
+  <script src="app.js"></script>
+</body>
+</html>

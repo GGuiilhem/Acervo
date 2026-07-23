@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Símbolo Acervo">
+  <defs>
+    <linearGradient id="g" x1="20" y1="10" x2="108" y2="118" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A99CFF"/><stop offset="1" stop-color="#6552EC"/>
+    </linearGradient>
+  </defs>
+  <path d="M64 114 43 73M64 114l21-41" fill="none" stroke="url(#g)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M43 73C29 62 24 48 26 31m17 42C35 54 36 37 43 18M31 51 17 40m20-6L29 20M85 73c14-11 19-25 17-42M85 73c8-19 7-36 0-55m12 33 14-11M91 34l8-14" fill="none" stroke="url(#g)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

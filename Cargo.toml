@@ -1,0 +1,24 @@
+[package]
+name = "acervo"
+version = "0.5.3"
+description = "Encontre, organize e controle seus arquivos"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+ignore = "0.4"
+regex = "1"
+open = "5"
+zip = { version = "4", default-features = false, features = ["deflate"] }
+memchr = "2"
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+panic = "abort"
