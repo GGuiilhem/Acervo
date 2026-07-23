@@ -32,6 +32,8 @@ cargo build --release
 
 O executável será gerado em `target/release/acervo.exe`.
 
+Cada nova versão enviada para `main` é testada e compilada automaticamente pelo GitHub Actions. A automação cria uma Release com `Acervo-portable.exe` e `Acervo-setup.msi`; a versão em `Cargo.toml` e `tauri.conf.json` deve ser incrementada antes da publicação.
+
 ## Roadmap
 
 - Organização e classificação de XMLs do eSocial.
