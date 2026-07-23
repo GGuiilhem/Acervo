@@ -3,6 +3,7 @@ const invoke = window.__TAURI__.core.invoke;
 const { Channel } = window.__TAURI__.core;
 const dialog = window.__TAURI__.dialog;
 const notification = window.__TAURI__.notification;
+const appWindow = window.__TAURI__.window.getCurrentWindow();
 let searching = false, found = 0, flushScheduled = false, selectingAll = false, windowFocused = true, resultSequence = 0;
 let sortState = { key: null, direction: 1 };
 const selected = new Set(), pending = [], discoveryOrder = new Map();
@@ -24,9 +25,13 @@ const messages = {
     tagline:'Find, organize, and control your files',settings:'Settings',close:'Close',searchIn:'Search in',selectFolderPlaceholder:'Select a folder…',selectFolder:'Select folder',fileContent:'File contents',fileNames:'File names',toggleMode:'Switch between content and file-name search',whatFind:'What do you want to find?',queryPlaceholder:'Enter text or an expression…',search:'Search',searching:'Searching…',cancel:'Cancel',advanced:'Advanced options',fileTypes:'File types',regex:'Regular expression',caseSensitive:'Case sensitive',wholeWord:'Whole word',includeHidden:'Include hidden items',includeSubfolders:'Include subfolders',searchReplace:'Search and replace',enableReplace:'Enable replacement',createBackup:'Create backup (.bak)',whatReplace:'What to replace',searchedText:'The search text above',otherText:'Other text or word',findOtherText:'Find this other text',replaceQueryPlaceholder:'Text or word to replace…',replaceWith:'Replace the located content with',newText:'New text…',replaceHelpSearch:'Finds the search text inside selected files and replaces it with the new content. Confirmation is always required.',replaceHelpCustom:'Finds this other text inside selected files and replaces it without depending on the file name or current search term.',filterSize:'Filter by size',anySize:'Any size',greaterThan:'Greater than',lessThan:'Less than',between:'Between',and:'and',filterDate:'Filter by modified date',anyDate:'Any date',after:'After',before:'Before',results:'Results',ready:'Ready to search',doubleClick:' · Double-click a result to open it',open:'Open',openFolder:'Open containing folder',copyTo:'Copy to…',moveTo:'Move/cut to…',zipSelected:'Zip selected…',replaceSelected:'Replace content in selected files',selectAll:'Select all',name:'Name',matches:'Matches',size:'Size',modified:'Modified',path:'Path',resultsHere:'Your results will appear here',chooseAndSearch:'Choose a folder and start a search.',settingsDesc:'Customize your Acervo experience',appearance:'Appearance',language:'Language',notifications:'Notifications',chooseTheme:'Choose a theme',flatThemes:'All themes use solid colors with no gradients.',languageDesc:'Choose the interface language.',notificationsDesc:'Receive a Windows alert when a background scan finishes.',notifyComplete:'Notify when search completes',notifyOnlyBackground:'The alert appears only when Acervo is not in the foreground.',permissionGranted:'Notification permission granted.',permissionDenied:'Notifications were not authorized by Windows.',selected:n=>`${n} selected`,files:n=>`${n} file${n===1?'':'s'}`,scanned:(a,b)=>`${a} scanned — ${b} found`,finished:n=>`Completed: ${n} files scanned`,cancelled:'Search cancelled',noResults:'No files found',tryFilters:'Try changing the text or filters.',resultsImmediate:'Results will appear immediately.',enableReplaceHint:'Enable “Search and replace” in advanced options.',enterOther:'Enter the other text to locate.',enterSearch:'Enter the search text.',replaceConfirm:(n,b)=>`Replace content in ${n} selected file(s)?\n${b?'A backup will be created before each change.':'Backup is disabled.'}`,changed:n=>`${n} file${n===1?'':'s'} changed.`,foldersOpened:n=>`${n} folder${n===1?'':'s'} opened.`,saveZip:'Save selected files as ZIP',zipFile:'ZIP file',zipCreated:n=>`ZIP created with ${n} file${n===1?'':'s'}.`,copyDialog:'Copy to',moveDialog:'Move/cut to',transferred:(n,m)=>`${n} file${n===1?'':'s'} ${m?'moved':'copied'}.`,notificationTitle:'Search completed',notificationBody:(s,f)=>`${s} files scanned, ${f} found.`
   }
 };
+const windowMessages = {
+  'pt-BR': { minimize:'Minimizar', maximize:'Maximizar', restore:'Restaurar', close:'Fechar' },
+  'en-US': { minimize:'Minimize', maximize:'Maximize', restore:'Restore', close:'Close' }
+};
 let prefs;
 try { prefs = { theme:'dark', language:'pt-BR', notifyComplete:false, ...JSON.parse(localStorage.getItem('acervo.settings') || '{}') }; } catch { prefs = { theme:'dark', language:'pt-BR', notifyComplete:false }; }
-const t = (key, ...args) => { const value = messages[prefs.language][key] ?? messages['pt-BR'][key] ?? key; return typeof value === 'function' ? value(...args) : value; };
+const t = (key, ...args) => { const value = messages[prefs.language][key] ?? windowMessages[prefs.language]?.[key] ?? messages['pt-BR'][key] ?? windowMessages['pt-BR'][key] ?? key; return typeof value === 'function' ? value(...args) : value; };
 const localeNumber = value => value.toLocaleString(prefs.language);
 function savePrefs() { localStorage.setItem('acervo.settings', JSON.stringify(prefs)); }
 function translatePage() {
@@ -34,7 +39,7 @@ function translatePage() {
   document.querySelectorAll('[data-i18n]').forEach(el => el.textContent = t(el.dataset.i18n));
   document.querySelectorAll('[data-i18n-placeholder]').forEach(el => el.placeholder = t(el.dataset.i18nPlaceholder));
   document.querySelectorAll('[data-i18n-title]').forEach(el => el.title = t(el.dataset.i18nTitle));
-  updateMode(); updateSelection(); if (!searching && !found) $('status').textContent = t('ready');
+  updateMode(); updateSelection(); updateMaximizeButton(); if (!searching && !found) $('status').textContent = t('ready');
 }
 function renderThemes() {
   $('theme-grid').innerHTML = themes.map(theme => `<button class="theme-card ${prefs.theme===theme.id?'active':''}" data-theme-choice="${theme.id}"><span class="theme-colors">${theme.colors.map(c=>`<i style="background:${c}"></i>`).join('')}</span><strong>${theme.name}</strong></button>`).join('');
@@ -43,6 +48,12 @@ function renderThemes() {
 function applyPrefs() { document.documentElement.dataset.theme = prefs.theme; document.querySelectorAll('[name=language]').forEach(r=>r.checked=r.value===prefs.language); $('notify-complete').checked=prefs.notifyComplete; renderThemes(); translatePage(); }
 
 window.addEventListener('focus',()=>windowFocused=true); window.addEventListener('blur',()=>windowFocused=false);
+async function updateMaximizeButton(){const maximized=await appWindow.isMaximized();const button=$('window-maximize');button.textContent=maximized?'❐':'□';button.title=t(maximized?'restore':'maximize');button.setAttribute('aria-label',button.title)}
+$('window-minimize').onclick=()=>appWindow.minimize();
+$('window-maximize').onclick=async()=>{await appWindow.toggleMaximize();updateMaximizeButton()};
+$('window-close').onclick=()=>appWindow.close();
+$('titlebar').ondblclick=event=>{if(!event.target.closest('.titlebar-actions'))appWindow.toggleMaximize().then(updateMaximizeButton)};
+appWindow.onResized(updateMaximizeButton);
 $('settings-open').onclick=()=>{$('settings-modal').hidden=false;applyPrefs()};
 $('settings-close').onclick=()=>$('settings-modal').hidden=true; document.querySelector('[data-close-settings]').onclick=()=>$('settings-modal').hidden=true;
 document.querySelectorAll('[data-settings-tab]').forEach(button=>button.onclick=()=>{document.querySelectorAll('[data-settings-tab]').forEach(b=>b.classList.toggle('active',b===button));document.querySelectorAll('[data-settings-panel]').forEach(p=>p.hidden=p.dataset.settingsPanel!==button.dataset.settingsTab)});

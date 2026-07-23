@@ -5,11 +5,16 @@
   <title>Acervo</title><link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <div id="titlebar" class="titlebar" data-tauri-drag-region>
+    <div class="titlebar-brand" data-tauri-drag-region><img src="assets/acervo-mark.svg" alt=""><strong data-tauri-drag-region>Acervo</strong></div>
+    <div class="titlebar-actions">
+      <button id="settings-open" class="titlebar-button settings-button" data-i18n-title="settings" title="Configurações">⚙</button>
+      <button id="window-minimize" class="titlebar-button window-button" data-i18n-title="minimize" title="Minimizar" aria-label="Minimizar">—</button>
+      <button id="window-maximize" class="titlebar-button window-button" data-i18n-title="maximize" title="Maximizar" aria-label="Maximizar">□</button>
+      <button id="window-close" class="titlebar-button window-button close-button" data-i18n-title="close" title="Fechar" aria-label="Fechar">×</button>
+    </div>
+  </div>
   <main class="app-shell">
-    <header>
-      <div class="brand"><img src="assets/acervo-mark.svg" alt="Acervo"><div><h1>Acervo</h1><p data-i18n="tagline">Encontre, organize e controle seus arquivos</p></div></div>
-      <button id="settings-open" class="icon-btn" data-i18n-title="settings" title="Configurações">⚙</button>
-    </header>
     <section class="card search-card">
       <label for="directory" data-i18n="searchIn">Pesquisar em</label>
       <div class="input-group"><input id="directory" data-i18n-placeholder="selectFolderPlaceholder" placeholder="Selecione uma pasta…" autocomplete="off"><button id="browse" class="secondary" data-i18n="selectFolder">Selecionar pasta</button></div>
