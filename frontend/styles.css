@@ -24,3 +24,22 @@ label,.empty strong,h1,h2,h3{color:var(--text)}.mode-label,.advanced-toggle,.res
 .table-wrap{flex:1 1 auto;min-height:270px}
 @media(min-width:1200px){.search-card{padding-left:clamp(22px,2vw,38px);padding-right:clamp(22px,2vw,38px)}.results-header{padding-left:clamp(20px,1.7vw,34px);padding-right:clamp(20px,1.7vw,34px)}}
 .titlebar{position:sticky;z-index:1900;top:0;height:32px;display:flex;align-items:center;justify-content:space-between;padding-left:10px;background:var(--panel);border-bottom:1px solid var(--border);color:var(--text);user-select:none}.titlebar-brand{height:100%;display:flex;align-items:center;gap:7px;font-size:12px;font-weight:400}.titlebar-brand img{width:16px;height:16px;object-fit:contain}.titlebar-actions{height:100%;display:flex;align-items:stretch}.titlebar-button{position:relative;width:46px;height:32px;padding:0;border:0;border-radius:0;background:transparent;color:var(--text);cursor:pointer}.settings-button{color:var(--muted);font:13px "Segoe UI Symbol","Segoe UI",sans-serif}.titlebar-button:hover{background:color-mix(in srgb,var(--text) 9%,transparent)}.window-button::before,.window-button::after{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)}.minimize-button::before{width:10px;height:1px;background:currentColor}.maximize-button::before{width:9px;height:9px;border:1px solid currentColor}.maximize-button[data-maximized="true"]::before{width:8px;height:8px;transform:translate(-58%,-42%);background:var(--panel);z-index:1}.maximize-button[data-maximized="true"]::after{width:8px;height:8px;border:1px solid currentColor;transform:translate(-35%,-65%)}.close-button::before,.close-button::after{width:12px;height:1px;background:currentColor}.close-button::before{transform:translate(-50%,-50%) rotate(45deg)}.close-button::after{transform:translate(-50%,-50%) rotate(-45deg)}.close-button:hover{background:#c42b1c;color:#fff}.titlebar-button:disabled{cursor:default}@media(max-width:760px){.titlebar-button{width:46px}.titlebar-brand{font-size:11px}}
+/* Codex-style window chrome (evaluation build). */
+body::after{content:"";position:fixed;z-index:3000;inset:0;border:1px solid color-mix(in srgb,var(--border) 82%,transparent);border-radius:8px;pointer-events:none}
+.app-shell{min-height:calc(100vh - 36px)}
+.titlebar{height:36px;padding-left:12px;background:color-mix(in srgb,var(--panel) 88%,var(--bg));border-bottom-color:color-mix(in srgb,var(--border) 76%,transparent)}
+.titlebar-brand{gap:8px;color:color-mix(in srgb,var(--text) 94%,transparent);font-size:12px}
+.titlebar-brand img{width:15px;height:15px}
+.titlebar-button{width:46px;height:36px;color:color-mix(in srgb,var(--text) 88%,transparent)}
+.settings-button{width:40px;margin-right:3px;color:var(--muted);font-size:15px}
+.titlebar-button:hover{background:color-mix(in srgb,var(--text) 8%,transparent)}
+.minimize-button::before{width:10px;height:1px}
+.maximize-button::before{width:8px;height:8px;border-radius:2px}
+.maximize-button[data-maximized="true"]::before,.maximize-button[data-maximized="true"]::after{width:7px;height:7px;border-radius:2px}
+.close-button::before,.close-button::after{width:13px;height:1px;border-radius:99px}
+.close-button:hover{background:#c42b1c;color:#fff}
+/* Match the crispness and foreground color of the maximize control. */
+.settings-button,.window-button{color:var(--text)}
+.minimize-button::before{top:18px;height:1px;transform:translateX(-50%);background:var(--text)}
+.close-button::before{content:"\E8BB";width:auto;height:auto;background:none;color:currentColor;font:10px/1 "Segoe Fluent Icons";transform:translate(-50%,-50%)}
+.close-button::after{display:none}
