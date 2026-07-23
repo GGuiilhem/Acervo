@@ -21,6 +21,7 @@
       <div class="mode-switch-row"><span id="content-label" class="mode-label active" data-i18n="fileContent">Conteúdo dos arquivos</span><label class="switch" data-i18n-title="toggleMode"><input id="search-mode" type="checkbox"><span class="slider"></span></label><span id="name-label" class="mode-label" data-i18n="fileNames">Nome dos arquivos</span></div>
       <label for="query" data-i18n="whatFind">O que você deseja encontrar?</label>
       <div class="input-group query-row"><input id="query" data-i18n-placeholder="queryPlaceholder" placeholder="Digite um texto ou uma expressão…" autofocus><button id="search" class="primary"><span>⌕</span> <span data-i18n="search">Pesquisar</span></button><button id="cancel" class="danger" hidden data-i18n="cancel">Cancelar</button></div>
+      <div class="advanced-container">
       <button id="advanced-toggle" class="advanced-toggle" aria-expanded="false"><span data-i18n="advanced">Opções avançadas</span><span class="chevron">⌄</span></button>
       <div id="advanced" class="advanced" hidden><div class="advanced-grid">
         <label class="field"><span data-i18n="fileTypes">Tipos de arquivo</span><input id="pattern" value="*" placeholder="*.txt; *.md"></label>
@@ -33,6 +34,7 @@
         <div class="advanced-section"><h3 data-i18n="filterSize">Filtrar por tamanho</h3><div class="filter-row"><select id="size-mode"><option value="any" data-i18n="anySize">Qualquer tamanho</option><option value="min" data-i18n="greaterThan">Maior que</option><option value="max" data-i18n="lessThan">Menor que</option><option value="between" data-i18n="between">Entre</option></select><input id="size-a" type="number" min="0" step="0.1" placeholder="0" disabled><span id="size-and" hidden data-i18n="and">e</span><input id="size-b" type="number" min="0" step="0.1" placeholder="0" disabled hidden><select id="size-unit"><option value="1024">KB</option><option value="1048576" selected>MB</option><option value="1073741824">GB</option></select></div></div>
         <div class="advanced-section"><h3 data-i18n="filterDate">Filtrar por data de modificação</h3><div class="filter-row"><select id="date-mode"><option value="any" data-i18n="anyDate">Qualquer data</option><option value="after" data-i18n="after">Após</option><option value="before" data-i18n="before">Antes</option><option value="between" data-i18n="between">Entre</option></select><input id="date-a" type="date" disabled><span id="date-and" hidden data-i18n="and">e</span><input id="date-b" type="date" disabled hidden></div></div>
       </div></div>
+      </div>
     </section>
     <section class="card results-card">
       <div class="results-header"><div><h2 data-i18n="results">Resultados</h2><p><span id="status" data-i18n="ready">Pronto para pesquisar</span><span class="open-hint" data-i18n="doubleClick"> · Clique duas vezes em um resultado para abrir</span></p></div><span id="count" class="badge">0 arquivos</span></div>
