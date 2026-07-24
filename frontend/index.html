@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR" data-theme="dark">
+<html lang="pt-BR" data-theme="mono">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
   <title>Acervo</title><link rel="stylesheet" href="styles.css">
@@ -20,7 +20,8 @@
       <div class="input-group"><input id="directory" data-i18n-placeholder="selectFolderPlaceholder" placeholder="Selecione uma pasta…" autocomplete="off"><button id="browse" class="secondary" data-i18n="selectFolder">Selecionar pasta</button></div>
       <div class="mode-switch-row"><span id="content-label" class="mode-label active" data-i18n="fileContent">Conteúdo dos arquivos</span><label class="switch" data-i18n-title="toggleMode"><input id="search-mode" type="checkbox"><span class="slider"></span></label><span id="name-label" class="mode-label" data-i18n="fileNames">Nome dos arquivos</span></div>
       <label for="query" data-i18n="whatFind">O que você deseja encontrar?</label>
-      <div class="input-group query-row"><input id="query" data-i18n-placeholder="queryPlaceholder" placeholder="Digite um texto ou uma expressão…" autofocus><button id="search" class="primary"><span>⌕</span> <span data-i18n="search">Pesquisar</span></button><button id="cancel" class="danger" hidden data-i18n="cancel">Cancelar</button></div>
+      <div class="input-group query-row"><textarea id="query" rows="2" data-i18n-placeholder="queryPlaceholder" placeholder="Digite um termo por linha…" autofocus></textarea><button id="search" class="primary" data-i18n="search">Pesquisar</button></div>
+      <small class="multi-search-hint" data-i18n="multiSearchHint">Pressione Enter para adicionar outro termo. A pesquisa encontrará arquivos que contenham qualquer uma das linhas.</small>
       <div class="advanced-container">
       <button id="advanced-toggle" class="advanced-toggle" aria-expanded="false"><span data-i18n="advanced">Opções avançadas</span><span class="chevron">⌄</span></button>
       <div id="advanced" class="advanced" hidden><div class="advanced-grid">

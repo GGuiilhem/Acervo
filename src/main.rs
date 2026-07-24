@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use aho_corasick::{AhoCorasick, AhoCorasickBuilder};
 use ignore::{WalkBuilder, WalkState};
 use memchr::{memchr, memchr2, memmem};
 use regex::bytes::{Regex, RegexBuilder};
@@ -102,6 +103,31 @@ fn regex_matcher(req: &SearchRequest) -> Result<Regex, String> {
         .map_err(|e| format!("Expressão inválida: {e}"))
 }
 
+fn replacement_matcher(req: &SearchRequest) -> Result<Regex, String> {
+    let parts: Vec<String> = req
+        .query
+        .lines()
+        .map(str::trim)
+        .filter(|term| !term.is_empty())
+        .map(|term| {
+            if req.use_regex {
+                term.to_owned()
+            } else {
+                regex::escape(term)
+            }
+        })
+        .collect();
+    let mut source = format!("(?:{})", parts.join("|"));
+    if req.whole_word {
+        source = format!(r"\b{source}\b");
+    }
+    RegexBuilder::new(&source)
+        .case_insensitive(!req.case_sensitive)
+        .unicode(true)
+        .build()
+        .map_err(|e| format!("Expressão inválida: {e}"))
+}
+
 #[derive(Clone)]
 enum SearchMatcher {
     Regex(Regex),
@@ -141,6 +167,39 @@ impl SearchMatcher {
     }
 }
 
+#[derive(Clone)]
+enum SearchMatchers {
+    Literals(AhoCorasick),
+    Expressions(Vec<SearchMatcher>),
+}
+
+impl SearchMatchers {
+    fn count(&self, haystack: &[u8]) -> usize {
+        match self {
+            Self::Literals(matcher) => matcher.find_iter(haystack).count(),
+            Self::Expressions(matchers) => {
+                matchers.iter().map(|matcher| matcher.count(haystack)).sum()
+            }
+        }
+    }
+
+    fn matching_terms(&self, haystack: &[u8]) -> usize {
+        match self {
+            Self::Literals(matcher) => {
+                let mut matched = vec![false; matcher.patterns_len()];
+                for occurrence in matcher.find_iter(haystack) {
+                    matched[occurrence.pattern().as_usize()] = true;
+                }
+                matched.into_iter().filter(|value| *value).count()
+            }
+            Self::Expressions(matchers) => matchers
+                .iter()
+                .filter(|matcher| matcher.is_match(haystack))
+                .count(),
+        }
+    }
+}
+
 fn count_ascii_case_insensitive(haystack: &[u8], needle: &[u8]) -> usize {
     if needle.is_empty() || haystack.len() < needle.len() {
         return 0;
@@ -169,15 +228,43 @@ fn count_ascii_case_insensitive(haystack: &[u8], needle: &[u8]) -> usize {
     count
 }
 
-fn search_matcher(req: &SearchRequest) -> Result<SearchMatcher, String> {
-    if !req.use_regex && !req.whole_word && (req.case_sensitive || req.query.is_ascii()) {
+fn matcher_for_term(req: &SearchRequest, term: &str) -> Result<SearchMatcher, String> {
+    if !req.use_regex && !req.whole_word && (req.case_sensitive || term.is_ascii()) {
         Ok(SearchMatcher::Literal {
-            needle: req.query.as_bytes().to_vec(),
+            needle: term.as_bytes().to_vec(),
             case_sensitive: req.case_sensitive,
         })
     } else {
-        regex_matcher(req).map(SearchMatcher::Regex)
+        let mut term_request = req.clone();
+        term_request.query = term.to_owned();
+        regex_matcher(&term_request).map(SearchMatcher::Regex)
     }
+}
+
+fn search_matchers(req: &SearchRequest) -> Result<SearchMatchers, String> {
+    let mut seen = std::collections::HashSet::new();
+    let terms: Vec<_> = req
+        .query
+        .lines()
+        .map(str::trim)
+        .filter(|term| !term.is_empty())
+        .filter(|term| seen.insert((*term).to_owned()))
+        .collect();
+    if !req.use_regex
+        && !req.whole_word
+        && (req.case_sensitive || terms.iter().all(|term| term.is_ascii()))
+    {
+        return AhoCorasickBuilder::new()
+            .ascii_case_insensitive(!req.case_sensitive)
+            .build(terms)
+            .map(SearchMatchers::Literals)
+            .map_err(|error| error.to_string());
+    }
+    terms
+        .into_iter()
+        .map(|term| matcher_for_term(req, term))
+        .collect::<Result<Vec<_>, _>>()
+        .map(SearchMatchers::Expressions)
 }
 
 fn wildcard_regex(patterns: &str) -> Result<Option<Regex>, String> {
@@ -205,19 +292,19 @@ fn wildcard_regex(patterns: &str) -> Result<Option<Regex>, String> {
         .map_err(|e| e.to_string())
 }
 
-fn validate(req: &SearchRequest) -> Result<(SearchMatcher, Option<Regex>), String> {
+fn validate(req: &SearchRequest) -> Result<(SearchMatchers, Option<Regex>), String> {
     if !Path::new(&req.directory).is_dir() {
         return Err("Selecione um diretório válido.".into());
     }
-    if req.query.is_empty() {
+    if req.query.lines().all(|term| term.trim().is_empty()) {
         return Err("Digite o texto que deseja pesquisar.".into());
     }
-    Ok((search_matcher(req)?, wildcard_regex(&req.file_pattern)?))
+    Ok((search_matchers(req)?, wildcard_regex(&req.file_pattern)?))
 }
 
 fn run_streaming_search(
     req: SearchRequest,
-    expression: SearchMatcher,
+    expression: SearchMatchers,
     file_filter: Option<Regex>,
     id: u64,
     active: Arc<AtomicU64>,
@@ -233,7 +320,11 @@ fn run_streaming_search(
         let mut counter = WalkBuilder::new(&req.directory);
         counter
             .hidden(!req.include_hidden)
-            .max_depth(if req.include_subfolders { None } else { Some(1) })
+            .max_depth(if req.include_subfolders {
+                None
+            } else {
+                Some(1)
+            })
             .follow_links(false)
             .threads(std::thread::available_parallelism().map_or(8, |v| v.get().clamp(4, 16)));
         counter.build_parallel().run(|| {
@@ -245,21 +336,38 @@ fn run_streaming_search(
                 if active.load(Ordering::Relaxed) != id {
                     return WalkState::Quit;
                 }
-                if entry.ok().and_then(|value| value.file_type()).is_some_and(|kind| kind.is_file()) {
+                if entry
+                    .ok()
+                    .and_then(|value| value.file_type())
+                    .is_some_and(|kind| kind.is_file())
+                {
                     let current = discovered.fetch_add(1, Ordering::Relaxed) + 1;
                     let elapsed_ms = started.elapsed().as_millis() as u64;
                     let previous_ms = last_catalog_ms.load(Ordering::Relaxed);
                     if elapsed_ms.saturating_sub(previous_ms) >= 100
-                        && last_catalog_ms.compare_exchange(previous_ms, elapsed_ms, Ordering::Relaxed, Ordering::Relaxed).is_ok()
+                        && last_catalog_ms
+                            .compare_exchange(
+                                previous_ms,
+                                elapsed_ms,
+                                Ordering::Relaxed,
+                                Ordering::Relaxed,
+                            )
+                            .is_ok()
                     {
-                        let _ = events.send(SearchEvent::Cataloging { discovered: current });
+                        let _ = events.send(SearchEvent::Cataloging {
+                            discovered: current,
+                        });
                     }
                 }
                 WalkState::Continue
             })
         });
         if active.load(Ordering::Relaxed) != id {
-            let _ = events.send(SearchEvent::Finished { scanned: 0, found: 0, cancelled: true });
+            let _ = events.send(SearchEvent::Finished {
+                scanned: 0,
+                found: 0,
+                cancelled: true,
+            });
             return;
         }
         Some(discovered.load(Ordering::Relaxed))
@@ -351,7 +459,7 @@ fn run_streaming_search(
                 return WalkState::Continue;
             }
             let matches = if mode.as_str() == "name" {
-                usize::from(expression.is_match(name.as_bytes()))
+                expression.matching_terms(name.as_bytes())
             } else if metadata.len() <= MAX_CONTENT_BYTES {
                 fs::read(entry.path()).map_or(0, |bytes| expression.count(&bytes))
             } else {
@@ -483,7 +591,7 @@ fn replace_in_files(req: ReplaceRequest) -> Result<usize, String> {
         min_modified: None,
         max_modified: None,
     };
-    let expression = regex_matcher(&search)?;
+    let expression = replacement_matcher(&search)?;
     let mut changed = 0;
     for value in req.paths {
         let path = Path::new(&value);
@@ -671,12 +779,36 @@ mod tests {
             min_modified: None,
             max_modified: None,
         };
-        let matcher = search_matcher(&req).unwrap();
+        let matcher = search_matchers(&req).unwrap();
         assert_eq!(
             matcher.count(b"<MATRICULA>123</MATRICULA><matricula>123</matricula>"),
             2
         );
-        assert!(matches!(matcher, SearchMatcher::Literal { .. }));
+        assert!(matches!(matcher, SearchMatchers::Literals(_)));
+    }
+
+    #[test]
+    fn searches_multiple_terms_from_separate_lines() {
+        let req = SearchRequest {
+            directory: ".".into(),
+            query: "111.111.111-11\n\n222.222.222-22\n111.111.111-11".into(),
+            mode: "content".into(),
+            use_regex: false,
+            case_sensitive: false,
+            whole_word: false,
+            include_hidden: false,
+            include_subfolders: true,
+            pre_count: false,
+            file_pattern: "*".into(),
+            min_size: None,
+            max_size: None,
+            min_modified: None,
+            max_modified: None,
+        };
+        let matchers = search_matchers(&req).unwrap();
+        assert!(matches!(&matchers, SearchMatchers::Literals(value) if value.patterns_len() == 2));
+        assert_eq!(matchers.count(b"111.111.111-11 e 222.222.222-22"), 2);
+        assert_eq!(matchers.matching_terms(b"arquivo-222.222.222-22.xml"), 1);
     }
 
     #[test]

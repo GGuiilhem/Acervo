@@ -1,6 +1,6 @@
 [package]
 name = "acervo"
-version = "0.6.8"
+version = "0.6.9"
 description = "Encontre, organize e controle seus arquivos"
 edition = "2021"
 
@@ -17,6 +17,7 @@ regex = "1"
 open = "5"
 zip = { version = "4", default-features = false, features = ["deflate"] }
 memchr = "2"
+aho-corasick = "1"
 
 [profile.release]
 strip = true
