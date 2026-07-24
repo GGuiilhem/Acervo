@@ -15,7 +15,8 @@ const themes = [
   { id:'midnight', name:'MidNight', colors:['#040713','#0a1024','#536dfe'] },
   { id:'ember', name:'Ember', colors:['#1a100f','#291817','#e45d3d'] },
   { id:'mono', name:'Mono', colors:['#141414','#202020','#e5e5e5'] },
-  { id:'cyberpunk', name:'CyberPunk', colors:['#080512','#151027','#00ddeb'] }
+  { id:'cyberpunk', name:'CyberPunk', colors:['#080512','#151027','#00ddeb'] },
+  { id:'custom', name:'Personalizar', colors:[] }
 ];
 const messages = {
   'pt-BR': {
@@ -30,19 +31,20 @@ const windowMessages = {
   'en-US': { minimize:'Minimize', maximize:'Maximize', restore:'Restore', close:'Close' }
 };
 const progressMessages = {
-  'pt-BR': { searchSettings:'Pesquisa',searchSettingsDesc:'Configure como o Acervo prepara e acompanha as pesquisas.',exactProgress:'Progresso exato',countBeforeSearch:'Contar todos os arquivos antes de pesquisar',countPerformanceWarning:'Exibe porcentagem exata, mas adiciona uma varredura completa e atrasa o início dos resultados. O impacto é maior em pesquisas por nome, HDs, rede e pastas sincronizadas.',cataloging:n=>`Catalogando arquivos — ${n} encontrados`,scannedExact:(a,total,p,f)=>`${a} de ${total} examinados — ${p}% — ${f} encontrados`,notificationsDesc:'Receba um aviso do Windows quando uma varredura terminar.',notifyAlways:'O aviso aparece sempre, mesmo quando o Acervo estiver em primeiro plano.',notificationInstallRequired:'No Windows, as notificações exigem que o Acervo seja instalado pelo MSI; a versão portátil não é registrada pelo sistema.',testNotification:'Testar notificação',testNotificationSent:'Notificação de teste enviada ao Windows.' },
-  'en-US': { searchSettings:'Search',searchSettingsDesc:'Configure how Acervo prepares and tracks searches.',exactProgress:'Exact progress',countBeforeSearch:'Count all files before searching',countPerformanceWarning:'Shows an exact percentage, but adds a full scan and delays the first results. The impact is greater for name searches, hard drives, network locations, and synced folders.',cataloging:n=>`Cataloging files — ${n} found`,scannedExact:(a,total,p,f)=>`${a} of ${total} scanned — ${p}% — ${f} found`,notificationsDesc:'Receive a Windows alert when a scan finishes.',notifyAlways:'The alert always appears, even while Acervo is in the foreground.',notificationInstallRequired:'On Windows, notifications require Acervo to be installed using the MSI; the portable build is not registered with the system.',testNotification:'Test notification',testNotificationSent:'Test notification sent to Windows.' }
+  'pt-BR': { searchSettings:'Pesquisa',searchSettingsDesc:'Configure como o Acervo prepara e acompanha as pesquisas.',exactProgress:'Progresso exato',countBeforeSearch:'Contar todos os arquivos antes de pesquisar',countPerformanceWarning:'Exibe porcentagem exata, mas adiciona uma varredura completa e atrasa o início dos resultados. O impacto é maior em pesquisas por nome, HDs, rede e pastas sincronizadas.',cataloging:n=>`Catalogando arquivos — ${n} encontrados`,scannedExact:(a,total,p,f)=>`${a} de ${total} examinados — ${p}% — ${f} encontrados`,notificationsDesc:'Receba um aviso do Windows quando uma varredura terminar.',notifyAlways:'O aviso aparece sempre, mesmo quando o Acervo estiver em primeiro plano.',notificationInstallRequired:'No Windows, as notificações exigem que o Acervo seja instalado pelo MSI; a versão portátil não é registrada pelo sistema.',testNotification:'Testar notificação',testNotificationSent:'Notificação de teste enviada ao Windows.',customTheme:'Personalizar',customizeColors:'Personalize suas cores',customizeColorsDesc:'Escolha as três cores principais do seu tema.',backgroundColor:'Fundo',panelColor:'Cards e painéis',accentColor:'Destaque' },
+  'en-US': { searchSettings:'Search',searchSettingsDesc:'Configure how Acervo prepares and tracks searches.',exactProgress:'Exact progress',countBeforeSearch:'Count all files before searching',countPerformanceWarning:'Shows an exact percentage, but adds a full scan and delays the first results. The impact is greater for name searches, hard drives, network locations, and synced folders.',cataloging:n=>`Cataloging files — ${n} found`,scannedExact:(a,total,p,f)=>`${a} of ${total} scanned — ${p}% — ${f} found`,notificationsDesc:'Receive a Windows alert when a scan finishes.',notifyAlways:'The alert always appears, even while Acervo is in the foreground.',notificationInstallRequired:'On Windows, notifications require Acervo to be installed using the MSI; the portable build is not registered with the system.',testNotification:'Test notification',testNotificationSent:'Test notification sent to Windows.',customTheme:'Customize',customizeColors:'Customize your colors',customizeColorsDesc:'Choose the three main colors for your theme.',backgroundColor:'Background',panelColor:'Cards and panels',accentColor:'Accent' }
 };
 let prefs;
 try {
   const saved=JSON.parse(localStorage.getItem('acervo.settings')||'{}');
   prefs={theme:'mono',language:'pt-BR',notifyComplete:false,preCount:false,...saved};
+  prefs.customColors={background:'#141414',panel:'#202020',accent:'#e5e5e5',...(saved.customColors||{})};
   if(saved.defaultThemeVersion!=='mono-v1'){
     if(!saved.theme||saved.theme==='dark')prefs.theme='mono';
     prefs.defaultThemeVersion='mono-v1';
     localStorage.setItem('acervo.settings',JSON.stringify(prefs));
   }
-} catch { prefs={theme:'mono',language:'pt-BR',notifyComplete:false,preCount:false,defaultThemeVersion:'mono-v1'}; }
+} catch { prefs={theme:'mono',language:'pt-BR',notifyComplete:false,preCount:false,defaultThemeVersion:'mono-v1',customColors:{background:'#141414',panel:'#202020',accent:'#e5e5e5'}}; }
 const t = (key, ...args) => { const value = progressMessages[prefs.language]?.[key] ?? messages[prefs.language][key] ?? windowMessages[prefs.language]?.[key] ?? progressMessages['pt-BR'][key] ?? messages['pt-BR'][key] ?? windowMessages['pt-BR'][key] ?? key; return typeof value === 'function' ? value(...args) : value; };
 const localeNumber = value => value.toLocaleString(prefs.language);
 function savePrefs() { localStorage.setItem('acervo.settings', JSON.stringify(prefs)); }
@@ -54,10 +56,14 @@ function translatePage() {
   updateMode(); updateSelection(); updateMaximizeButton(); if (!searching && !found) $('status').textContent = t('ready');
 }
 function renderThemes() {
-  $('theme-grid').innerHTML = themes.map(theme => `<button class="theme-card ${prefs.theme===theme.id?'active':''}" data-theme-choice="${theme.id}"><span class="theme-colors">${theme.colors.map(c=>`<i style="background:${c}"></i>`).join('')}</span><strong>${theme.name}</strong></button>`).join('');
-  document.querySelectorAll('[data-theme-choice]').forEach(button => button.onclick = () => { prefs.theme = button.dataset.themeChoice; document.documentElement.dataset.theme = prefs.theme; savePrefs(); renderThemes(); });
+  $('theme-grid').innerHTML = themes.map(theme => {const colors=theme.id==='custom'?Object.values(prefs.customColors):theme.colors;return `<button class="theme-card ${prefs.theme===theme.id?'active':''}" data-theme-choice="${theme.id}"><span class="theme-colors">${colors.map(c=>`<i style="background:${c}"></i>`).join('')}</span><strong>${theme.id==='custom'?t('customTheme'):theme.name}</strong></button>`}).join('');
+  document.querySelectorAll('[data-theme-choice]').forEach(button => button.onclick = () => { prefs.theme = button.dataset.themeChoice; applyTheme(); savePrefs(); renderThemes(); });
+  $('custom-theme-editor').hidden=prefs.theme!=='custom';
+  document.querySelectorAll('[data-custom-color]').forEach(input=>{const key=input.dataset.customColor;input.value=prefs.customColors[key];document.querySelector(`[data-color-value="${key}"]`).textContent=prefs.customColors[key].toUpperCase()});
 }
-function applyPrefs() { document.documentElement.dataset.theme = prefs.theme; document.querySelectorAll('[name=language]').forEach(r=>r.checked=r.value===prefs.language); $('notify-complete').checked=prefs.notifyComplete;$('pre-count').checked=prefs.preCount;renderThemes();translatePage(); }
+function contrastColor(hex){const value=parseInt(hex.slice(1),16),r=value>>16,g=value>>8&255,b=value&255;return(r*299+g*587+b*114)/1000>150?'#111111':'#ffffff'}
+function applyTheme(){const root=document.documentElement,colors=prefs.customColors;root.dataset.theme=prefs.theme;root.style.setProperty('--custom-background',colors.background);root.style.setProperty('--custom-panel',colors.panel);root.style.setProperty('--custom-accent',colors.accent);root.style.setProperty('--custom-text',contrastColor(colors.panel));root.style.setProperty('--custom-on-primary',contrastColor(colors.accent))}
+function applyPrefs() { applyTheme(); document.querySelectorAll('[name=language]').forEach(r=>r.checked=r.value===prefs.language); $('notify-complete').checked=prefs.notifyComplete;$('pre-count').checked=prefs.preCount;renderThemes();translatePage(); }
 
 window.addEventListener('focus',()=>windowFocused=true); window.addEventListener('blur',()=>windowFocused=false);
 async function updateMaximizeButton(){const maximized=await appWindow.isMaximized();const button=$('window-maximize');button.dataset.maximized=String(maximized);button.title=t(maximized?'restore':'maximize');button.setAttribute('aria-label',button.title)}
@@ -69,7 +75,8 @@ appWindow.onResized(updateMaximizeButton);
 $('settings-open').onclick=()=>{$('settings-modal').hidden=false;applyPrefs()};
 $('settings-close').onclick=()=>$('settings-modal').hidden=true; document.querySelector('[data-close-settings]').onclick=()=>$('settings-modal').hidden=true;
 document.querySelectorAll('[data-settings-tab]').forEach(button=>button.onclick=()=>{document.querySelectorAll('[data-settings-tab]').forEach(b=>b.classList.toggle('active',b===button));document.querySelectorAll('[data-settings-panel]').forEach(p=>p.hidden=p.dataset.settingsPanel!==button.dataset.settingsTab)});
-document.querySelectorAll('[name=language]').forEach(radio=>radio.onchange=()=>{prefs.language=radio.value;savePrefs();translatePage()});
+document.querySelectorAll('[name=language]').forEach(radio=>radio.onchange=()=>{prefs.language=radio.value;savePrefs();translatePage();renderThemes()});
+document.querySelectorAll('[data-custom-color]').forEach(input=>input.oninput=()=>{const key=input.dataset.customColor;prefs.customColors[key]=input.value;prefs.theme='custom';applyTheme();savePrefs();renderThemes()});
 $('notify-complete').onchange=async()=>{let enabled=$('notify-complete').checked;if(enabled){let granted=await notification.isPermissionGranted();if(!granted)granted=(await notification.requestPermission())==='granted';enabled=granted;$('notify-complete').checked=granted;$('notification-permission').textContent=t(granted?'permissionGranted':'permissionDenied')}else $('notification-permission').textContent='';prefs.notifyComplete=enabled;savePrefs()};
 $('pre-count').onchange=()=>{prefs.preCount=$('pre-count').checked;savePrefs()};
 $('test-notification').onclick=async()=>{let granted=await notification.isPermissionGranted();if(!granted)granted=(await notification.requestPermission())==='granted';if(granted){notification.sendNotification({title:'Acervo',body:t('testNotificationSent')});$('notification-permission').textContent=t('testNotificationSent')}else $('notification-permission').textContent=t('permissionDenied')};
