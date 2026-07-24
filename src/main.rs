@@ -1,13 +1,16 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use aho_corasick::{AhoCorasick, AhoCorasickBuilder};
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use ignore::{WalkBuilder, WalkState};
 use memchr::{memchr, memchr2, memmem};
 use regex::bytes::{Regex, RegexBuilder};
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
+    io::Read,
     path::{Path, PathBuf},
+    process::Command,
     sync::{
         atomic::{AtomicU64, AtomicUsize, Ordering},
         Arc,
@@ -19,6 +22,107 @@ use zip::{write::SimpleFileOptions, CompressionMethod, ZipWriter};
 
 const MAX_RESULTS: usize = 100_000;
 const MAX_CONTENT_BYTES: u64 = 256 * 1024 * 1024;
+const REUSABLE_BUFFER_BYTES: u64 = 1024 * 1024;
+
+#[cfg(windows)]
+const FILE_FLAG_SEQUENTIAL_SCAN: u32 = 0x0800_0000;
+
+fn worker_threads(mode: &str) -> usize {
+    let logical = std::thread::available_parallelism().map_or(8, |value| value.get());
+    if mode == "content" {
+        logical.saturating_mul(2).clamp(8, 32)
+    } else {
+        logical.clamp(4, 16)
+    }
+}
+
+fn read_reusing_buffer(path: &Path, buffer: &mut Vec<u8>) -> bool {
+    buffer.clear();
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        options.custom_flags(FILE_FLAG_SEQUENTIAL_SCAN);
+    }
+    options
+        .open(path)
+        .and_then(|mut file| file.read_to_end(buffer))
+        .is_ok()
+}
+
+fn powershell_encoded(script: &str) -> String {
+    let bytes: Vec<u8> = script.encode_utf16().flat_map(u16::to_le_bytes).collect();
+    BASE64.encode(bytes)
+}
+
+fn powershell_literal(value: &str) -> String {
+    value.replace('\'', "''")
+}
+
+fn normal_windows_path(path: &Path) -> String {
+    let value = path.to_string_lossy();
+    if let Some(rest) = value.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{rest}")
+    } else if let Some(rest) = value.strip_prefix(r"\\?\") {
+        rest.to_owned()
+    } else {
+        value.into_owned()
+    }
+}
+
+fn defender_contextual_exclusion(directory: &Path) -> Result<String, String> {
+    if !directory.is_absolute() || !directory.is_dir() {
+        return Err("Selecione uma pasta válida antes de ativar a aceleração.".into());
+    }
+    if directory.parent().is_none() {
+        return Err("A raiz inteira de uma unidade não pode ser excluída.".into());
+    }
+    let folder = normal_windows_path(
+        &fs::canonicalize(directory)
+            .map_err(|error| format!("Não foi possível validar a pasta: {error}"))?,
+    );
+    let executable = normal_windows_path(
+        &std::env::current_exe()
+            .map_err(|error| format!("Não foi possível localizar o Acervo: {error}"))?,
+    );
+    Ok(format!(
+        r#"{}\:{{PathType:folder,Process:"{}"}}"#,
+        folder.trim_end_matches(['\\', '/']),
+        executable
+    ))
+}
+
+#[cfg(windows)]
+fn run_elevated_powershell(script: &str) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let inner = powershell_encoded(script);
+    let outer = format!(
+        "$ErrorActionPreference='Stop'; try {{ $ps=Join-Path $env:SystemRoot 'System32\\WindowsPowerShell\\v1.0\\powershell.exe'; $p=Start-Process -FilePath $ps -Verb RunAs -WindowStyle Hidden -Wait -PassThru -ArgumentList @('-NoProfile','-NonInteractive','-EncodedCommand','{inner}'); exit $p.ExitCode }} catch {{ exit 1 }}"
+    );
+    let status = Command::new("powershell.exe")
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-EncodedCommand",
+            &powershell_encoded(&outer),
+        ])
+        .creation_flags(CREATE_NO_WINDOW)
+        .status()
+        .map_err(|error| format!("Não foi possível abrir a confirmação do Windows: {error}"))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err("A alteração não foi autorizada ou foi bloqueada pelo Microsoft Defender.".into())
+    }
+}
+
+#[cfg(not(windows))]
+fn run_elevated_powershell(_script: &str) -> Result<(), String> {
+    Err("A aceleração do Microsoft Defender está disponível somente no Windows.".into())
+}
 
 #[derive(Default)]
 struct AppState {
@@ -326,7 +430,7 @@ fn run_streaming_search(
                 Some(1)
             })
             .follow_links(false)
-            .threads(std::thread::available_parallelism().map_or(8, |v| v.get().clamp(4, 16)));
+            .threads(worker_threads("name"));
         counter.build_parallel().run(|| {
             let active = active.clone();
             let discovered = discovered.clone();
@@ -383,7 +487,7 @@ fn run_streaming_search(
             Some(1)
         })
         .follow_links(false)
-        .threads(std::thread::available_parallelism().map_or(8, |v| v.get().clamp(4, 16)));
+        .threads(worker_threads(&req.mode));
 
     let mode = Arc::new(req.mode);
     let min_size = req.min_size;
@@ -402,6 +506,7 @@ fn run_streaming_search(
         let expression = expression.clone();
         let file_filter = file_filter.clone();
         let events = events.clone();
+        let mut content_buffer = Vec::with_capacity(64 * 1024);
         Box::new(move |entry| {
             if active.load(Ordering::Relaxed) != id || found.load(Ordering::Relaxed) >= MAX_RESULTS
             {
@@ -461,7 +566,15 @@ fn run_streaming_search(
             let matches = if mode.as_str() == "name" {
                 expression.matching_terms(name.as_bytes())
             } else if metadata.len() <= MAX_CONTENT_BYTES {
-                fs::read(entry.path()).map_or(0, |bytes| expression.count(&bytes))
+                if metadata.len() <= REUSABLE_BUFFER_BYTES {
+                    if read_reusing_buffer(entry.path(), &mut content_buffer) {
+                        expression.count(&content_buffer)
+                    } else {
+                        0
+                    }
+                } else {
+                    fs::read(entry.path()).map_or(0, |bytes| expression.count(&bytes))
+                }
             } else {
                 0
             };
@@ -506,6 +619,29 @@ fn start_search(
 #[tauri::command]
 fn cancel_search(state: State<AppState>) {
     state.active_search.fetch_add(1, Ordering::SeqCst);
+}
+
+#[tauri::command]
+fn set_defender_acceleration(directory: String, enabled: bool) -> Result<String, String> {
+    let exclusion = defender_contextual_exclusion(Path::new(&directory))?;
+    let target = powershell_literal(&exclusion);
+    let operation = if enabled {
+        "Add-MpPreference"
+    } else {
+        "Remove-MpPreference"
+    };
+    let script = format!(
+        "$ErrorActionPreference='Stop'; Import-Module Defender; $target='{target}'; $current=@((Get-MpPreference -ErrorAction Stop).ExclusionPath); if ({enabled_script}) {{ {operation} -ExclusionPath $target -Force -ErrorAction Stop }}",
+        enabled_script = if enabled {
+            "$current -notcontains $target"
+        } else {
+            "$current -contains $target"
+        }
+    );
+    run_elevated_powershell(&script)?;
+    Ok(normal_windows_path(&fs::canonicalize(directory).map_err(
+        |error| format!("Não foi possível validar a pasta: {error}"),
+    )?))
 }
 
 #[tauri::command]
@@ -715,6 +851,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             start_search,
             cancel_search,
+            set_defender_acceleration,
             open_path,
             open_containing_folders,
             transfer_files,
@@ -759,6 +896,19 @@ mod tests {
         assert!(regex_matcher(&req)
             .unwrap()
             .is_match("uma PESQUISA rápida".as_bytes()));
+    }
+
+    #[test]
+    fn builds_a_process_scoped_defender_exclusion() {
+        let directory = std::env::temp_dir().join(format!(
+            "acervo-defender-test-{}",
+            TEST_ID.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&directory).unwrap();
+        let exclusion = defender_contextual_exclusion(&directory).unwrap();
+        assert!(exclusion.contains(r#"\:{PathType:folder,Process:""#));
+        assert!(exclusion.ends_with("\"}"));
+        fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]

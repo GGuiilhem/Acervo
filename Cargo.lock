@@ -4,9 +4,10 @@ version = 4
 
 [[package]]
 name = "acervo"
-version = "0.6.10"
+version = "0.6.11"
 dependencies = [
  "aho-corasick",
+ "base64 0.22.1",
  "ignore",
  "memchr",
  "open",
