@@ -4,7 +4,7 @@ const { Channel } = window.__TAURI__.core;
 const dialog = window.__TAURI__.dialog;
 const notification = window.__TAURI__.notification;
 const appWindow = window.__TAURI__.window.getCurrentWindow();
-let searching = false, found = 0, flushScheduled = false, selectingAll = false, windowFocused = true, resultSequence = 0;
+let searching = false, preparingSearch = false, found = 0, flushScheduled = false, selectingAll = false, windowFocused = true, resultSequence = 0;
 let sortState = { key: null, direction: 1 };
 const selected = new Set(), pending = [], discoveryOrder = new Map();
 const themes = [
@@ -36,16 +36,16 @@ const progressMessages = {
 };
 const performanceMessages = {
   'pt-BR': {
-    firstSearchPerformance:'Desempenho da primeira pesquisa',firstSearchPerformanceDesc:'O Acervo usa leitura paralela otimizada mesmo sem cache. Se o Defender ainda limitar a pasta, você pode autorizar a opção abaixo.',defenderAcceleration:'Acelerar a pasta selecionada no Microsoft Defender',defenderWarning:'Cria uma exclusão contextual somente para esta pasta e somente quando o Acervo a acessa. Reduz a proteção durante esses acessos e exige confirmação de administrador do Windows.',defenderNoFolder:'Selecione uma pasta na tela principal para configurar esta opção.',defenderCurrentFolder:path=>`Pasta atual: ${path}`,defenderConfirm:path=>`Autorizar o Acervo a criar uma exclusão contextual do Microsoft Defender para esta pasta?\n\n${path}\n\nO Windows solicitará permissão de administrador.`,defenderRemoving:'Aguardando a confirmação do Windows para remover a exclusão…',defenderAdding:'Aguardando a confirmação do Windows para adicionar a exclusão…',defenderEnabled:'A aceleração do Defender está ativa para esta pasta.',defenderDisabled:'A exclusão desta pasta foi removida.',defenderFailed:error=>`Não foi possível alterar o Defender: ${error}`
+    firstSearchPerformance:'Desempenho da primeira pesquisa',firstSearchPerformanceDesc:'O Acervo pode preparar automaticamente cada pasta antes da primeira pesquisa de conteúdo.',defenderAcceleration:'Preparar automaticamente novas pastas',defenderWarning:'Esta opção não altera a pasta agora. Ao pesquisar conteúdo em uma pasta ainda não preparada, o Windows solicitará permissão de administrador e o Acervo criará uma exclusão contextual apenas para seus próprios acessos.',defenderNoFolder:'Selecione uma pasta na tela principal para consultar seu estado.',defenderCurrentFolder:path=>`Pasta atual ainda não preparada: ${path}`,defenderFolderReady:path=>`Pasta atual já preparada: ${path}`,defenderFolderWillPrepare:path=>`A pasta será preparada ao iniciar a próxima pesquisa de conteúdo: ${path}`,defenderPreferenceEnabled:'A preparação automática foi ativada. Nenhuma pasta foi alterada agora.',defenderPreferenceDisabled:'A preparação automática foi desativada. Pastas já preparadas continuam autorizadas até serem removidas.',defenderPreparing:'Preparando a pasta no Microsoft Defender antes da pesquisa…',defenderRemoving:'Aguardando a confirmação do Windows para remover a exclusão…',defenderEnabled:'Pasta preparada. Iniciando a pesquisa…',defenderDisabled:'A exclusão desta pasta foi removida.',defenderFailed:error=>`Não foi possível preparar a pasta: ${error}`,removeDefenderFolder:'Remover aceleração da pasta atual'
   },
   'en-US': {
-    firstSearchPerformance:'First-search performance',firstSearchPerformanceDesc:'Acervo uses optimized parallel reading even without a cache. If Defender still limits the folder, you can authorize the option below.',defenderAcceleration:'Accelerate the selected folder in Microsoft Defender',defenderWarning:'Creates a contextual exclusion only for this folder and only when Acervo accesses it. This reduces protection during those accesses and requires Windows administrator confirmation.',defenderNoFolder:'Select a folder on the main screen to configure this option.',defenderCurrentFolder:path=>`Current folder: ${path}`,defenderConfirm:path=>`Allow Acervo to create a contextual Microsoft Defender exclusion for this folder?\n\n${path}\n\nWindows will request administrator permission.`,defenderRemoving:'Waiting for Windows confirmation to remove the exclusion…',defenderAdding:'Waiting for Windows confirmation to add the exclusion…',defenderEnabled:'Defender acceleration is active for this folder.',defenderDisabled:'The exclusion for this folder was removed.',defenderFailed:error=>`Could not change Defender: ${error}`
+    firstSearchPerformance:'First-search performance',firstSearchPerformanceDesc:'Acervo can automatically prepare each folder before its first content search.',defenderAcceleration:'Automatically prepare new folders',defenderWarning:'This option does not change the folder now. When searching content in a folder that has not been prepared, Windows will request administrator permission and Acervo will create a contextual exclusion only for its own access.',defenderNoFolder:'Select a folder on the main screen to check its status.',defenderCurrentFolder:path=>`Current folder is not prepared yet: ${path}`,defenderFolderReady:path=>`Current folder is already prepared: ${path}`,defenderFolderWillPrepare:path=>`The folder will be prepared when the next content search starts: ${path}`,defenderPreferenceEnabled:'Automatic preparation is enabled. No folder was changed now.',defenderPreferenceDisabled:'Automatic preparation is disabled. Previously prepared folders remain authorized until removed.',defenderPreparing:'Preparing the folder in Microsoft Defender before searching…',defenderRemoving:'Waiting for Windows confirmation to remove the exclusion…',defenderEnabled:'Folder prepared. Starting the search…',defenderDisabled:'The exclusion for this folder was removed.',defenderFailed:error=>`Could not prepare the folder: ${error}`,removeDefenderFolder:'Remove acceleration from current folder'
   }
 };
 let prefs;
 try {
   const saved=JSON.parse(localStorage.getItem('acervo.settings')||'{}');
-  prefs={theme:'mono',language:'pt-BR',notifyComplete:false,preCount:false,...saved};
+  prefs={theme:'mono',language:'pt-BR',notifyComplete:false,preCount:false,autoDefenderAcceleration:false,...saved};
   prefs.customColors={background:'#141414',panel:'#202020',accent:'#e5e5e5',...(saved.customColors||{})};
   prefs.defenderFolders=Array.isArray(saved.defenderFolders)?saved.defenderFolders:[];
   if(saved.defaultThemeVersion!=='mono-v1'){
@@ -53,7 +53,7 @@ try {
     prefs.defaultThemeVersion='mono-v1';
     localStorage.setItem('acervo.settings',JSON.stringify(prefs));
   }
-} catch { prefs={theme:'mono',language:'pt-BR',notifyComplete:false,preCount:false,defaultThemeVersion:'mono-v1',customColors:{background:'#141414',panel:'#202020',accent:'#e5e5e5'},defenderFolders:[]}; }
+} catch { prefs={theme:'mono',language:'pt-BR',notifyComplete:false,preCount:false,autoDefenderAcceleration:false,defaultThemeVersion:'mono-v1',customColors:{background:'#141414',panel:'#202020',accent:'#e5e5e5'},defenderFolders:[]}; }
 const t = (key, ...args) => { const value = performanceMessages[prefs.language]?.[key] ?? progressMessages[prefs.language]?.[key] ?? messages[prefs.language][key] ?? windowMessages[prefs.language]?.[key] ?? performanceMessages['pt-BR'][key] ?? progressMessages['pt-BR'][key] ?? messages['pt-BR'][key] ?? windowMessages['pt-BR'][key] ?? key; return typeof value === 'function' ? value(...args) : value; };
 const localeNumber = value => value.toLocaleString(prefs.language);
 function savePrefs() { localStorage.setItem('acervo.settings', JSON.stringify(prefs)); }
@@ -62,7 +62,7 @@ function translatePage() {
   document.querySelectorAll('[data-i18n]').forEach(el => el.textContent = t(el.dataset.i18n));
   document.querySelectorAll('[data-i18n-placeholder]').forEach(el => el.placeholder = t(el.dataset.i18nPlaceholder));
   document.querySelectorAll('[data-i18n-title]').forEach(el => el.title = t(el.dataset.i18nTitle));
-  updateMode(); updateSelection(); updateMaximizeButton(); if (!searching && !found) $('status').textContent = t('ready');
+  updateMode(); updateSelection(); updateDefenderControl(); updateMaximizeButton(); if (!searching && !found) $('status').textContent = t('ready');
 }
 function renderThemes() {
   $('theme-grid').innerHTML = themes.map(theme => {const colors=theme.id==='custom'?Object.values(prefs.customColors):theme.colors;return `<button class="theme-card ${prefs.theme===theme.id?'active':''}" data-theme-choice="${theme.id}"><span class="theme-colors">${colors.map(c=>`<i style="background:${c}"></i>`).join('')}</span><strong>${theme.id==='custom'?t('customTheme'):theme.name}</strong></button>`}).join('');
@@ -72,30 +72,43 @@ function renderThemes() {
 }
 function contrastColor(hex){const value=parseInt(hex.slice(1),16),r=value>>16,g=value>>8&255,b=value&255;return(r*299+g*587+b*114)/1000>150?'#111111':'#ffffff'}
 function applyTheme(){const root=document.documentElement,colors=prefs.customColors;root.dataset.theme=prefs.theme;root.style.setProperty('--custom-background',colors.background);root.style.setProperty('--custom-panel',colors.panel);root.style.setProperty('--custom-accent',colors.accent);root.style.setProperty('--custom-text',contrastColor(colors.panel));root.style.setProperty('--custom-on-primary',contrastColor(colors.accent))}
-function applyPrefs() { applyTheme(); document.querySelectorAll('[name=language]').forEach(r=>r.checked=r.value===prefs.language); $('notify-complete').checked=prefs.notifyComplete;$('pre-count').checked=prefs.preCount;renderThemes();translatePage();updateDefenderControl(); }
+function applyPrefs() { applyTheme(); document.querySelectorAll('[name=language]').forEach(r=>r.checked=r.value===prefs.language); $('notify-complete').checked=prefs.notifyComplete;$('pre-count').checked=prefs.preCount;$('defender-acceleration').checked=prefs.autoDefenderAcceleration;renderThemes();translatePage();updateDefenderControl(); }
 function normalizedDirectory(value){return value.trim().replace(/[\\/]+$/,'').toLocaleLowerCase('en-US')}
 function defenderEnabledFor(directory){const normalized=normalizedDirectory(directory);return Boolean(normalized)&&prefs.defenderFolders.some(path=>normalizedDirectory(path)===normalized)}
 function updateDefenderControl(){
-  const directory=$('directory').value.trim(),control=$('defender-acceleration'),folder=$('defender-folder');
-  control.checked=defenderEnabledFor(directory);
-  control.disabled=searching;
-  folder.textContent=directory?t('defenderCurrentFolder',directory):t('defenderNoFolder');
+  const directory=$('directory').value.trim(),control=$('defender-acceleration'),folder=$('defender-folder'),remove=$('remove-defender-folder'),prepared=defenderEnabledFor(directory);
+  control.checked=prefs.autoDefenderAcceleration;
+  control.disabled=searching||preparingSearch;
+  remove.hidden=!prepared;remove.disabled=searching||preparingSearch;
+  folder.textContent=!directory?t('defenderNoFolder'):prepared?t('defenderFolderReady',directory):prefs.autoDefenderAcceleration?t('defenderFolderWillPrepare',directory):t('defenderCurrentFolder',directory);
 }
 async function changeDefenderAcceleration(){
-  const control=$('defender-acceleration'),directory=$('directory').value.trim(),enabled=control.checked,status=$('defender-status');
-  status.className='permission-note';
-  if(!directory){control.checked=false;status.textContent=t('defenderNoFolder');status.classList.add('error');return}
-  if(enabled&&!confirm(t('defenderConfirm',directory))){control.checked=false;return}
-  control.disabled=true;status.textContent=t(enabled?'defenderAdding':'defenderRemoving');
+  prefs.autoDefenderAcceleration=$('defender-acceleration').checked;
+  savePrefs();
+  const status=$('defender-status');status.className='permission-note success';status.textContent=t(prefs.autoDefenderAcceleration?'defenderPreferenceEnabled':'defenderPreferenceDisabled');
+  updateDefenderControl();
+}
+async function removeCurrentDefenderFolder(){
+  const directory=$('directory').value.trim(),status=$('defender-status'),remove=$('remove-defender-folder');
+  if(!directory||!defenderEnabledFor(directory))return;
+  remove.disabled=true;status.className='permission-note';status.textContent=t('defenderRemoving');
   try{
-    const canonical=await invoke('set_defender_acceleration',{directory,enabled});
+    const canonical=await invoke('set_defender_acceleration',{directory,enabled:false});
     prefs.defenderFolders=prefs.defenderFolders.filter(path=>normalizedDirectory(path)!==normalizedDirectory(directory)&&normalizedDirectory(path)!==normalizedDirectory(canonical));
-    if(enabled)prefs.defenderFolders.push(canonical);
     savePrefs();
     $('directory').value=canonical;
-    status.textContent=t(enabled?'defenderEnabled':'defenderDisabled');status.classList.add('success');
-  }catch(error){control.checked=!enabled;status.textContent=t('defenderFailed',String(error));status.classList.add('error')}
+    status.textContent=t('defenderDisabled');status.classList.add('success');
+  }catch(error){status.textContent=t('defenderFailed',String(error));status.classList.add('error')}
   finally{updateDefenderControl()}
+}
+async function prepareDefenderForSearch(directory){
+  if(!prefs.autoDefenderAcceleration||currentMode()!=='content'||defenderEnabledFor(directory))return true;
+  const status=$('status');status.classList.remove('error');status.textContent=t('defenderPreparing');
+  try{
+    const canonical=await invoke('set_defender_acceleration',{directory,enabled:true});
+    prefs.defenderFolders=prefs.defenderFolders.filter(path=>normalizedDirectory(path)!==normalizedDirectory(directory)&&normalizedDirectory(path)!==normalizedDirectory(canonical));
+    prefs.defenderFolders.push(canonical);savePrefs();$('directory').value=canonical;updateDefenderControl();status.textContent=t('defenderEnabled');return true;
+  }catch(error){status.textContent=t('defenderFailed',String(error));status.classList.add('error');return false}
 }
 
 window.addEventListener('focus',()=>windowFocused=true); window.addEventListener('blur',()=>windowFocused=false);
@@ -113,6 +126,7 @@ document.querySelectorAll('[data-custom-color]').forEach(input=>input.oninput=()
 $('notify-complete').onchange=async()=>{let enabled=$('notify-complete').checked;if(enabled){let granted=await notification.isPermissionGranted();if(!granted)granted=(await notification.requestPermission())==='granted';enabled=granted;$('notify-complete').checked=granted;$('notification-permission').textContent=t(granted?'permissionGranted':'permissionDenied')}else $('notification-permission').textContent='';prefs.notifyComplete=enabled;savePrefs()};
 $('pre-count').onchange=()=>{prefs.preCount=$('pre-count').checked;savePrefs()};
 $('defender-acceleration').onchange=changeDefenderAcceleration;
+$('remove-defender-folder').onclick=removeCurrentDefenderFolder;
 $('test-notification').onclick=async()=>{let granted=await notification.isPermissionGranted();if(!granted)granted=(await notification.requestPermission())==='granted';if(granted){notification.sendNotification({title:'Acervo',body:t('testNotificationSent')});$('notification-permission').textContent=t('testNotificationSent')}else $('notification-permission').textContent=t('permissionDenied')};
 async function notifyFinished(scanned,foundCount){if(!prefs.notifyComplete)return;try{if(await notification.isPermissionGranted())notification.sendNotification({title:t('notificationTitle'),body:t('notificationBody',localeNumber(scanned),localeNumber(foundCount))})}catch{}}
 
@@ -123,7 +137,7 @@ function configureRange(prefix){const mode=$(`${prefix}-mode`),a=$(`${prefix}-a`
 configureRange('size');configureRange('date');
 function currentMode(){return $('search-mode').checked?'name':'content'}
 function updateMode(){const content=currentMode()==='content';$('content-label').classList.toggle('active',content);$('name-label').classList.toggle('active',!content);$('replace-section').hidden=false;$('replace-source-field').hidden=!content;if(!content)$('replace-source').value='custom';const custom=!content||$('replace-source').value==='custom';$('replace-query-field').hidden=!custom;$('replace-query').disabled=!custom||!$('enable-replace').checked;$('replace-help').textContent=t(content&&!custom?'replaceHelpSearch':'replaceHelpCustom');document.querySelectorAll('.replace-option').forEach(b=>b.hidden=!$('enable-replace').checked)}
-$('search-mode').onchange=updateMode;
+$('search-mode').onchange=()=>{updateMode();updateDefenderControl()};
 $('enable-replace').onchange=()=>{const enabled=$('enable-replace').checked;$('replacement').disabled=!enabled;$('replace-source').disabled=!enabled;$('replace-query').disabled=!enabled||$('replace-source').value!=='custom';document.querySelectorAll('.replace-option').forEach(b=>b.hidden=!enabled);updateSelection()};
 $('replace-source').onchange=()=>updateMode();
 function formatSize(bytes){if(!bytes)return'0 B';const units=['B','KB','MB','GB'],i=Math.min(Math.floor(Math.log(bytes)/Math.log(1024)),3);return`${(bytes/1024**i).toFixed(i?1:0)} ${units[i]}`}
@@ -135,6 +149,15 @@ function setSearching(value){
   $('advanced').querySelectorAll('input,select,button').forEach(control=>{
     if(value){control.dataset.searchWasDisabled=String(control.disabled);control.disabled=true}
     else{control.disabled=control.dataset.searchWasDisabled==='true';delete control.dataset.searchWasDisabled}
+  });
+  updateDefenderControl();
+}
+function setPreparingSearch(value){
+  preparingSearch=value;$('search').disabled=value;
+  ['directory','browse','query','search-mode'].forEach(id=>$(id).disabled=value);
+  $('advanced').querySelectorAll('input,select,button').forEach(control=>{
+    if(value){control.dataset.prepareWasDisabled=String(control.disabled);control.disabled=true}
+    else{control.disabled=control.dataset.prepareWasDisabled==='true';delete control.dataset.prepareWasDisabled}
   });
   updateDefenderControl();
 }
@@ -151,9 +174,10 @@ function sizeFilters(){const mode=$('size-mode').value,unit=Number($('size-unit'
 function dayValue(id,end=false){const value=$(id).value;return value?Math.floor(new Date(`${value}T${end?'23:59:59':'00:00:00'}`).getTime()/1000):null}function dateFilters(){const mode=$('date-mode').value;if(mode==='after')return[dayValue('date-a'),null];if(mode==='before')return[null,dayValue('date-a',true)];if(mode==='between')return[dayValue('date-a'),dayValue('date-b',true)];return[null,null]}
 function requestData(){const[minSize,maxSize]=sizeFilters(),[minModified,maxModified]=dateFilters();return{directory:$('directory').value.trim(),query:$('query').value,mode:currentMode(),useRegex:$('regex').checked,caseSensitive:$('case').checked,wholeWord:$('whole').checked,includeHidden:$('hidden').checked,includeSubfolders:$('subfolders').checked,preCount:$('pre-count').checked,filePattern:$('pattern').value,minSize,maxSize,minModified,maxModified}}
 async function search(){
-  if(searching)return;
+  if(searching||preparingSearch)return;
   const directory=$('directory').value.trim(),hasTerm=$('query').value.split(/\r?\n/).some(line=>line.trim());
   if(!directory||!hasTerm){$('status').textContent=t(!directory?'selectFolderFirst':'enterSearch');$('status').classList.add('error');return}
+  setPreparingSearch(true);const prepared=await prepareDefenderForSearch(directory);setPreparingSearch(false);if(!prepared)return;
   found=0;pending.length=0;selected.clear();selectingAll=false;updateSelection();
   $('results').innerHTML='';$('actions').hidden=true;$('count').textContent=t('files',0);
   $('empty').style.display='flex';$('empty').querySelector('strong').textContent=t('searching');$('empty').querySelector('span').textContent=t('resultsImmediate');$('status').classList.remove('error');
